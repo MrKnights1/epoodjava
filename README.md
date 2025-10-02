@@ -6,13 +6,6 @@ E-commerce order management system implementing the Decorator design pattern for
 
 See projekt demonstreerib objektorienteeritud programmeerimist Java keeles, kasutades **Decorator design pattern**'i tellimuste lisateenuste haldamiseks. Süsteem võimaldab klientidel lisada tellimusele mitmeid täiendavaid teenuseid (kingituspakend, kiirtoimetamine, tervituskaart), mis dünaamiliselt muudavad tellimuse hinda.
 
-## User Story
-
-**Kui klient**
-Soovib tellimust täiustada (kingituspakend, kiirtoimetamine, tervituskaart)
-
-**Siis ta saab lisada lisateenuseid, mis muudavad tellimuse hinda**
-
 ## Arhitektuur
 
 ### Decorator Pattern
@@ -122,14 +115,12 @@ mvn test
 ./run.sh
 
 # Alternatiiv
-java -jar target/order-system-1.0-SNAPSHOT.jar
+mvn exec:java
 ```
 
 #### Demo režiim (automaatne demonstratsioon)
 
 ```bash
-java -jar target/order-system-1.0-SNAPSHOT.jar --demo
-# või
 mvn exec:java -Dexec.args="--demo"
 ```
 
@@ -140,19 +131,23 @@ Rakendus pakub interaktiivset konsoolipõhist kasutajaliidest:
 ### Põhifunktsioonid
 
 1. **🛒 Uue tellimuse loomine**
+
    - Vali toode kataloogist (5 erinevat toodet)
    - Lisa soovitud lisateenused
    - Näe lõpphinda reaalajas
 
 2. **� Toodete sirvimine**
+
    - Vaata kõiki saadaolevaid tooteid
    - Hinnad ja kirjeldused
 
 3. **�📜 Tellimuste ajalugu**
+
    - Vaata kõiki loodud tellimusi
    - Näe käivet ja statistikat
 
 4. **💰 Teenuste hinnakiri**
+
    - Ülevaade kõigist saadaolevatest teenustest
 
 5. **ℹ️ Info rakenduse kohta**
@@ -213,7 +208,7 @@ order = new GreetingCardDecorator(order, "Head sünnipäeva!");
 System.out.println(order.getDescription());
 // "Nutitelefon + Kingituspakend + Kiirtoimetamine + Tervituskaart"
 
-System.out.println(order.calculateTotal()); 
+System.out.println(order.calculateTotal());
 // 616.00 (599.00 + 5.00 + 10.00 + 2.00)
 ```
 
@@ -221,7 +216,6 @@ System.out.println(order.calculateTotal());
 
 Projekt sisaldab põhjalikke unit teste, mis katavad:
 
-- ✅ Kõik acceptance criteria
 - ✅ Vigaste sisendite käsitlus (null, negatiivne hind)
 - ✅ Dekoraatorite kombineerimine erinevates järjekordades
 - ✅ Äärejuhud (tasuta toode, korduvad dekoraatorid)
@@ -236,24 +230,29 @@ mvn test
 ## Objektorienteeritud põhimõtted
 
 ### 1. Klassid ja objektid
+
 - `Order` - interface
 - `BasicOrder` - konkreetne klass
 - `OrderDecorator` - abstraktne klass
 - Kolm konkreetset dekoraatorit
 
 ### 2. Pärilus (Inheritance)
+
 - Kõik dekoraatorid pärivad `OrderDecorator` klassist
 - `OrderDecorator` implementeerib `Order` interface'i
 
 ### 3. Kompositsioon
+
 - Dekoraatorid **wrapivad** teisi `Order` objekte
 - Dünaamiline käitumise lisamine ilma pärimist kasutamata
 
 ### 4. Polymorphism
+
 - Kõik objektid kasutavad `Order` interface'i
 - Rekursiivne `calculateTotal()` kutsumine läbi decorator chain'i
 
 ### 5. Encapsulation
+
 - Private/protected väljad
 - Public meetodid API jaoks
 - Implementatsioon on peidetud
@@ -265,12 +264,14 @@ mvn test
 **Eesmärk:** Lisada objektile dünaamiliselt täiendavat funktsionaalsust ilma klassi struktuuri muutmata.
 
 **Põhjendus:**
+
 - ✅ Alternatiiv pärimisele (vältib klasside plahvatust)
 - ✅ Teenuseid saab lisada runtime'il
 - ✅ Teenused on kombineeritavad suvalises järjekorras
 - ✅ Open/Closed Principle: avatud laiendamiseks, suletud muutmiseks
 
 **Implementatsioon:**
+
 1. `Order` - base component interface
 2. `BasicOrder` - concrete component
 3. `OrderDecorator` - abstract decorator
@@ -285,6 +286,7 @@ Rakendus kasutab SLF4J + Logback professionaalset logimist:
 - **Log levels**: DEBUG, INFO, ERROR
 
 Näide logidest:
+
 ```
 14:32:15.123 [main] INFO  ee.commerce.order.Main - === E-poe tellimuste süsteem ===
 14:32:15.125 [main] DEBUG ee.commerce.order.BasicOrder - Created BasicOrder: Sülearvuti with price 899.99
@@ -301,6 +303,7 @@ Kood sisaldab põhjalikku vigade käsitlust:
 4. **Logging**: Kõik vead logitakse
 
 Näide:
+
 ```java
 if (productName == null || productName.trim().isEmpty()) {
     throw new IllegalArgumentException("Product name cannot be null or empty");
@@ -316,5 +319,3 @@ MIT License - vaba kasutamiseks õppe- ja arendusülesannetes.
 Projekti aluseks on Java OOP ja design patterns'i õppematerjalid.
 
 ---
-
-📚 Vaata ka: [BEST_PRACTICES.md](BEST_PRACTICES.md) - Detailne selgitus Java parimatest praktikatest
