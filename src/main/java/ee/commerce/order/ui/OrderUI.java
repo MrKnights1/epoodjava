@@ -5,8 +5,8 @@ import ee.commerce.order.Order;
 import ee.commerce.order.decorator.ExpressShippingDecorator;
 import ee.commerce.order.decorator.GiftWrappingDecorator;
 import ee.commerce.order.decorator.GreetingCardDecorator;
-import ee.commerce.order.model.Product;
-import ee.commerce.order.model.ProductCatalog;
+import ee.commerce.order.model.*;
+import ee.commerce.order.payment.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -31,10 +31,17 @@ public class OrderUI {
     private static class OrderItem {
         final String description;
         final BigDecimal total;
+        final OrderStatus status;
+        final String paymentMethod;
+        final String transactionId;
         
-        OrderItem(String description, BigDecimal total) {
+        OrderItem(String description, BigDecimal total, OrderStatus status, 
+                 String paymentMethod, String transactionId) {
             this.description = description;
             this.total = total;
+            this.status = status;
+            this.paymentMethod = paymentMethod;
+            this.transactionId = transactionId;
         }
     }
     
@@ -143,17 +150,61 @@ public class OrderUI {
         // Add services
         order = addServices(order);
         
-        // Show final order
+        // Create complete order
+        CompleteOrder completeOrder = new CompleteOrder(order, selectedProduct.getId());
+        
+        // Show order summary
         System.out.println("\n" + "═".repeat(60));
-        System.out.println("✅ TELLIMUS LOODUD!");
+        System.out.println("📋 TELLIMUSE KOKKUVÕTE");
         System.out.println("═".repeat(60));
         System.out.println("📝 Tellimus: " + order.getDescription());
         System.out.println("💰 KOGUSUMMA: " + String.format("%.2f€", order.calculateTotal()));
+        System.out.println("🆔 Tellimuse number: " + completeOrder.getOrderId());
         System.out.println("═".repeat(60));
         
-        // Add to history
-        orderHistory.add(new OrderItem(order.getDescription(), order.calculateTotal()));
-        logger.info("Order completed - Total: {}€", order.calculateTotal());
+        // Process payment
+        PaymentProcessor.PaymentResult paymentResult = processPayment(completeOrder);
+        
+        if (paymentResult.isSuccess()) {
+            // Mark order as paid
+            completeOrder.markAsPaid(paymentResult.getTransactionId(), 
+                                    paymentResult.getPaymentMethod());
+            
+            // Decrease inventory
+            InventoryManager inventory = InventoryManager.getInstance();
+            if (inventory.reserveStock(selectedProduct.getId(), 1)) {
+                logger.info("Stock reserved for product {}", selectedProduct.getId());
+            } else {
+                logger.warn("Failed to reserve stock for product {}", selectedProduct.getId());
+            }
+            
+            // Show success
+            System.out.println("\n" + "═".repeat(60));
+            System.out.println("✅ TELLIMUS EDUKALT LOODUD JA MAKSTUD!");
+            System.out.println("═".repeat(60));
+            System.out.println("🎉 Täname ostu eest!");
+            System.out.println("🆔 Tellimuse number: " + completeOrder.getOrderId());
+            System.out.println("💳 Maksemeetod: " + paymentResult.getPaymentMethod());
+            System.out.println("🔖 Tehingu ID: " + paymentResult.getTransactionId());
+            System.out.println("📦 Staatus: " + completeOrder.getStatus().getEstonianName());
+            System.out.println("═".repeat(60));
+            
+            // Add to history
+            orderHistory.add(new OrderItem(order.getDescription(), order.calculateTotal(),
+                                          completeOrder.getStatus(), paymentResult.getPaymentMethod(),
+                                          paymentResult.getTransactionId()));
+        } else {
+            // Payment failed - order stays in cart
+            completeOrder.markAsFailed();
+            
+            System.out.println("\n" + "═".repeat(60));
+            System.out.println("❌ MAKSE EBAÕNNESTUS");
+            System.out.println("═".repeat(60));
+            System.out.println("⚠️  " + paymentResult.getMessage());
+            System.out.println("📋 Tellimus jääb ostukorvi avatuks");
+            System.out.println("💡 Proovi uuesti või vali teine maksemeetod");
+            System.out.println("═".repeat(60));
+        }
         
         // Ask if user wants to continue
         System.out.print("\nVajuta ENTER et jätkata...");
@@ -256,6 +307,60 @@ public class OrderUI {
     }
     
     /**
+     * Processes payment for an order.
+     * 
+     * @param completeOrder the complete order to process payment for
+     * @return payment result
+     */
+    private PaymentProcessor.PaymentResult processPayment(CompleteOrder completeOrder) {
+        System.out.println("\n" + "─".repeat(60));
+        System.out.println("💳 MAKSEMEETODI VALIK");
+        System.out.println("─".repeat(60));
+        
+        System.out.println("\nSaadaolevad maksemeetodid:");
+        System.out.println("  [1] 💳 Krediitkaart (kiire, limiit: 10 000€)");
+        System.out.println("  [2] 🅿️  PayPal (turvaline, limiit: 15 000€)");
+        System.out.println("  [3] 🏦 Pangaülekanne (suurte summade jaoks, limiit: 50 000€)");
+        System.out.println("  [0] ❌ Tühista tellimus");
+        
+        while (true) {
+            System.out.print("\nVali maksemeetod: ");
+            String choice = scanner.nextLine().trim();
+            
+            PaymentStrategy strategy = null;
+            
+            switch (choice) {
+                case "1":
+                    strategy = new CreditCardPayment();
+                    break;
+                case "2":
+                    strategy = new PayPalPayment();
+                    break;
+                case "3":
+                    strategy = new BankTransferPayment();
+                    break;
+                case "0":
+                    System.out.println("❌ Tellimus tühistatud");
+                    return new PaymentProcessor.PaymentResult(false, null, OrderStatus.CANCELLED,
+                                                             "Kasutaja tühistas", "None");
+                default:
+                    System.out.println("❌ Vigane valik! Palun vali 0-3.");
+                    continue;
+            }
+            
+            // Process payment with selected strategy
+            completeOrder.markAsProcessing();
+            System.out.println("\n⏳ Makset töödeldakse...");
+            
+            PaymentProcessor processor = new PaymentProcessor(strategy);
+            PaymentProcessor.PaymentResult result = processor.processPayment(
+                completeOrder.getTotal(), completeOrder.getOrderId());
+            
+            return result;
+        }
+    }
+    
+    /**
      * Browse available products.
      */
     private void browseProducts() {
@@ -292,21 +397,36 @@ public class OrderUI {
             System.out.println("Loo esmalt uus tellimus!");
         } else {
             BigDecimal totalRevenue = BigDecimal.ZERO;
+            int paidOrders = 0;
             
             for (int i = 0; i < orderHistory.size(); i++) {
                 OrderItem item = orderHistory.get(i);
                 System.out.println("\n🛒 Tellimus #" + (i + 1));
                 System.out.println("   📝 " + item.description);
                 System.out.println("   💰 " + String.format("%.2f€", item.total));
-                totalRevenue = totalRevenue.add(item.total);
+                System.out.println("   📦 Staatus: " + item.status.getEstonianName());
+                if (item.paymentMethod != null) {
+                    System.out.println("   💳 Maksemeetod: " + item.paymentMethod);
+                }
+                if (item.transactionId != null) {
+                    System.out.println("   🔖 Tehingu ID: " + item.transactionId);
+                }
+                
+                if (item.status == OrderStatus.PAID) {
+                    totalRevenue = totalRevenue.add(item.total);
+                    paidOrders++;
+                }
             }
             
             System.out.println("\n" + "─".repeat(60));
             System.out.println("📊 Tellimusi kokku: " + orderHistory.size());
+            System.out.println("✅ Makstud tellimusi: " + paidOrders);
             System.out.println("💵 Käive kokku: " + String.format("%.2f€", totalRevenue));
-            System.out.println("💰 Keskmine tellimus: " + 
-                String.format("%.2f€", totalRevenue.divide(
-                    new BigDecimal(orderHistory.size()), 2, java.math.RoundingMode.HALF_UP)));
+            if (paidOrders > 0) {
+                System.out.println("💰 Keskmine tellimus: " + 
+                    String.format("%.2f€", totalRevenue.divide(
+                        new BigDecimal(paidOrders), 2, java.math.RoundingMode.HALF_UP)));
+            }
         }
         
         System.out.print("\nVajuta ENTER et jätkata...");
